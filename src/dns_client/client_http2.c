@@ -182,6 +182,13 @@ static int _dns_client_http2_pending_data(struct dns_conn_stream *stream, struct
 										  struct dns_query_struct *query, void *packet, int len)
 {
 	struct epoll_event event;
+	
+	/* Validate input parameters */
+	if (len <= 0 || len > DNS_IN_PACKSIZE - 128) {
+		errno = EINVAL;
+		return -1;
+	}
+	
 	if (DNS_TCP_BUFFER - stream->send_buff.len < len) {
 		errno = ENOMEM;
 		return -1;
@@ -419,7 +426,10 @@ static int _dns_client_http2_process_stream_one(struct dns_server_info *server_i
 	if (status > 0 && status != 200) {
 		tlog(TLOG_WARN, "http2 server query from %s:%d failed, server return http code: %d", server_info->ip,
 			 server_info->port, status);
-		server_info->prohibit = 1;
+		/* Only prohibit server on server errors (5xx), not client errors (4xx) */
+		if (status >= 500 && status < 600) {
+			server_info->prohibit = 1;
+		}
 		return 1;
 	}
 
